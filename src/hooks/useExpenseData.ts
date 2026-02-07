@@ -5,6 +5,8 @@ import {
   createEmptyMonth,
   EXPENSE_CATEGORIES,
 } from "@/lib/expense-types";
+import { getExpenses, getCategories, createCategory, createExpense } from "@/lib/api";
+import { mapRemoteToMonthData } from "@/lib/remote-to-local";
 
 const STORAGE_KEY = "expense-tracker-data";
 
@@ -71,15 +73,21 @@ function getKey(month: number, year: number) {
 }
 
 export function useExpenseData() {
+  const [categoryMap, setCategoryMap] = useState<Record<string, string>>(() => ({}));
+
   const [allData, setAllData] = useState<Record<string, MonthData>>(() => {
+    // Get stored data, but only use it if we don't have a fresh token
+    const token = localStorage.getItem("api_token");
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
+    if (stored && !token) {
       try {
         return JSON.parse(stored);
       } catch {
         // ignore
       }
     }
+    // if token exists, start fresh so we fetch from backend
+    // if VITE_API_URL is set and a token exists, we'll fetch remote data on mount
     return getSampleData();
   });
 
@@ -89,6 +97,32 @@ export function useExpenseData() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(allData));
   }, [allData]);
+
+  // On mount, if backend is configured and token present, fetch remote expenses and categories
+  useEffect(() => {
+    const tryLoadRemote = async () => {
+      try {
+        if (!(import.meta.env.VITE_API_URL)) return;
+        // prefer runtime token from localStorage; fall back to VITE_API_TOKEN
+        const token = localStorage.getItem("api_token") ?? import.meta.env.VITE_API_TOKEN;
+        if (!token) return;
+        const [expenses, categories] = await Promise.all([getExpenses(), getCategories()]);
+
+        // Categories are global; use what exists in DB
+        const map: Record<string, string> = {};
+        categories.forEach((c: any) => (map[c.name] = c.id));
+        setCategoryMap(map);
+
+        // Replace ALL local data with remote data
+        const mapped = mapRemoteToMonthData(expenses, categories);
+        setAllData(mapped);
+      } catch (e) {
+        // ignore remote load errors for now
+        console.warn("Remote load failed", e);
+      }
+    };
+    tryLoadRemote();
+  }, []);
 
   const currentData = allData[getKey(currentMonth, currentYear)] ?? createEmptyMonth(currentMonth, currentYear);
 
@@ -104,8 +138,26 @@ export function useExpenseData() {
         );
         return { ...prev, [key]: { ...existing, days: newDays } };
       });
+
+      // Fire-and-forget sync to backend
+      (async () => {
+        try {
+          // determine date in ISO format (use midnight UTC)
+          const dt = new Date(currentYear, currentMonth, day);
+          const dateStr = dt.toISOString();
+          const catId = categoryMap[category as string];
+          // Only sync if category exists in global list
+          if (catId) {
+            await createExpense({ amount: value, description: undefined, date: dateStr, categoryId: catId });
+          } else {
+            console.warn(`Category "${category}" not found in categoryMap`);
+          }
+        } catch (e) {
+          console.warn("Sync expense failed", e);
+        }
+      })();
     },
-    [currentMonth, currentYear]
+    [currentMonth, currentYear, categoryMap]
   );
 
   const goToPrevMonth = useCallback(() => {

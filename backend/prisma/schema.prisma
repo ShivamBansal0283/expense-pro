@@ -1,0 +1,36 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  // Use DATABASE_URL env var. For local quick dev you can use SQLite: file:./dev.db
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  name      String?
+  password  String
+  expenses  Expense[]
+  createdAt DateTime  @default(now())
+}
+
+model Category {
+  id     String   @id @default(cuid())
+  name   String
+  expenses Expense[]
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  amount      Float
+  description String?
+  date        DateTime
+  user        User     @relation(fields: [userId], references: [id])
+  userId      String
+  category    Category? @relation(fields: [categoryId], references: [id])
+  categoryId  String?
+  createdAt   DateTime  @default(now())
+}

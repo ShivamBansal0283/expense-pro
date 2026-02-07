@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, IndianRupee } from "lucide-react";
+import { ChevronLeft, ChevronRight, IndianRupee, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MONTHS } from "@/lib/expense-types";
 
@@ -42,11 +42,18 @@ export function ExpenseHeader({
           </Button>
         </div>
 
-        <div className="text-right">
-          <p className="text-xs text-muted-foreground">Monthly Total</p>
-          <p className="text-lg font-bold font-mono text-primary">
-            ₹{monthlyTotal.toLocaleString("en-IN")}
-          </p>
+        <div className="flex items-center gap-3">
+          <div className="text-right">
+            <p className="text-xs text-muted-foreground">Monthly Total</p>
+            <p className="text-lg font-bold font-mono text-primary">
+              ₹{monthlyTotal.toLocaleString("en-IN")}
+            </p>
+          </div>
+          <div>
+            <Button variant="ghost" size="icon" onClick={() => { localStorage.removeItem('api_token'); localStorage.removeItem('expense-tracker-data'); window.location.href = '/'; }}>
+              <LogOut className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </div>
     </header>
